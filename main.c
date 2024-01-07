@@ -38,6 +38,16 @@ void help(){
     printf(" hget\t[KEY] [FIELD]\n");
     printf(" hdel\t[KEY] [FIELD]\n");
     printf(" expire\t[KEY] [TIME]\n");
+    printf(" zadd\t[KEY] [MEMBER] [VAL]\n");
+    printf(" zcard\t[KEY]\n");
+    printf(" zcount\t[KEY] [LEFT] [RIGHT]\n");
+    printf(" zinterstore\t[DEST] [SOURCE1] [SOURCE2]\n");
+    printf(" zunionstore\t[DEST] [SOURCE1] [SOURCE2]\n");
+    printf(" zrange\t[KEY] [LEFT] [RIGHT]\n");
+    printf(" zrangebyscore\t[KEY] [LEFT] [RIGHT]\n");
+    printf(" zrank\t[KEY] [MEMBER]\n");
+    printf(" zrem\t[KEY] [MEMBER]\n");
+    printf(" zremrangebyscore\t[KEY] [LEFT] [RIGHT]\n");
     printf(" help \t\t\t\t- list command usage.\n");
     printf(" exit \t\t\t\t- exit and close DB.\n");
 }
@@ -64,6 +74,24 @@ void hello(){
         "********************\n");
 }
 
+// static double str_to_double(char *str){
+//     char *endptr;
+//     errno = 0;  // Reset errno before the conversion
+//     double val = strtod(str, &endptr);
+
+//     // Check for various possible errors
+//     if (endptr == str) {
+//         // No digits were found
+//         printf("Error: No digits were found\n");
+//     } else if (errno == ERANGE) {
+//         // The number is out of range for a double
+//         printf("Error: Number out of range\n");
+//     } else if (*endptr != '\0') {
+//         // The string contains extra characters after the number
+//         printf("Error: Extra characters after the number: '%s'\n", endptr);
+//     }
+
+// }
 
 static void stdin_cb(struct ev_loop *loop, ev_io *w, int revents) {
     char buffer[BUFFER_SIZE];
@@ -250,30 +278,236 @@ static void stdin_cb(struct ev_loop *loop, ev_io *w, int revents) {
                 printf("Invalid usage of command `expire`.\n");
                 help();   
             }else{
-                // char *endptr;
-                // uint64_t time = strtol(args[2], &endptr, 10);
-
-                // check error
-                // if ((errno == ERANGE && (value == UINT64_MAX || value == LONG_MIN)) || (errno != 0 && time == 0)) {
-                //     perror("strtol");
-                //     return 1;
-                // }
-
-                // if (endptr == input) {
-                //     printf("没有找到数字\n");
-                //     return 1;
-                // }
-
-                // if (*endptr != '\n' && *endptr != '\0') {  // 检查是否有额外的字符
-                //     printf("额外的字符： %s\n", endptr);
-                //     return 1;
-                // }
-
                 int state = expire(db, args[1], atoi(args[2]));
                 if(state == FAIL)
                     printf("Fatal error. Can not set key `%s` expire\n", args[1]);
                 else 
                     printf("expire %s %s successfully.\n", args[1], args[2]);
+            }
+        }
+        else if(strcmp(args[0], "zadd") == 0){ // zadd key member val
+            if(argv != 4){
+                printf("Invalid usage of command `zadd`.\n");
+                help();   
+            }else{
+                // TODO:
+                char *endptr;
+                errno = 0;  // Reset errno before the conversion
+                double val = strtod(args[3], &endptr);
+
+                // Check for various possible errors
+                if (endptr == args[3]) {
+                    // No digits were found
+                    printf("Error: No digits were found\n");
+                    goto convertFail;
+                } else if (errno == ERANGE) {
+                    // The number is out of range for a double
+                    printf("Error: Number out of range\n");
+                    goto convertFail;
+                } else if (*endptr != '\0') {
+                    // The string contains extra characters after the number
+                    printf("Error: Extra characters after the number: '%s'\n", endptr);
+                    goto convertFail;
+                } else {
+                    // Successful conversion
+                    printf("Converted number: %lf\n", val);
+                    // goto convertFail;
+                    int state = zadd(db, args[1], args[2], val);
+                    if(state == FAIL)
+                        printf("Fatal error. Can not zadd %s %s %lf\n", args[1], args[2], val);
+                    else 
+                        printf("zadd %s %s %lf successfully. \n", args[1], args[2], val);
+                }
+            }
+        }
+        else if(strcmp(args[0], "zcard") == 0){ // zcard key
+            if(argv != 2){
+                printf("Invalid usage of command `zcard`.\n");
+                help();   
+            }else{
+                // TODO:
+                int len = zcard(db, args[1]);
+                if(len == -1)
+                    printf("Fatal error. Can not zcard %s %s\n", args[1], args[2]);
+                else 
+                    printf("%d\n", len);
+            }
+        }
+        else if(strcmp(args[0], "zcount") == 0){ // zcount key left right
+            if(argv != 4){
+                printf("Invalid usage of command `zcount`.\n");
+                help();   
+            }else{
+                // TODO:
+                int len = zcount(db, args[1], atoi(args[2]), atoi(args[3]));
+                if(len == -1)
+                    printf("Fatal error. Can not zcount %s %s %s \n", args[1], args[2], args[3]);
+                else 
+                    printf("%d\n", len);
+            }
+        }
+        else if(strcmp(args[0], "zinterstore") == 0){ // zinterstore dest source1 source2
+            if(argv != 4){
+                printf("Invalid usage of command `zinterstore`.\n");
+                help();   
+            }else{
+                // TODO:
+                int state = zinterstore(db, args[1], args[2], args[3]);
+                if(state == FAIL)
+                    printf("Fatal error. Can not zinterstore %s %s %s \n", args[1], args[2], args[3]);
+                else 
+                    printf("zinterstore %s %s %s successfully. \n", args[1], args[2], args[3]);
+            }
+        }
+        else if(strcmp(args[0], "zunionstore") == 0){ // zunionstore dest source1 source2
+            if(argv != 4){
+                printf("Invalid usage of command `zunionstore`.\n");
+                help();   
+            }else{
+                // TODO:
+                int state = zunionstore(db, args[1], args[2], args[3]);
+                if(state == FAIL)
+                    printf("Fatal error. Can not zunionstore %s %s %s \n", args[1], args[2], args[3]);
+                else 
+                    printf("zunionstore %s %s %s successfully. \n", args[1], args[2], args[3]);
+            }
+        }
+        else if(strcmp(args[0], "zrange") == 0){ // zrange key left right
+            if(argv != 4){
+                printf("Invalid usage of command `zrange`.\n");
+                help();   
+            }else{
+                // TODO:
+                int state = zrange(db, args[1], atoi(args[2]), atoi(args[3]));
+                if(state == FAIL)
+                    printf("Fatal error. Can not zrange %s %s %s \n", args[1], args[2], args[3]);
+                // else 
+                //     printf("zrange %s %s %s successfully. \n", args[1], args[2], args[3]);
+            }
+        }
+        else if(strcmp(args[0], "zrangebyscore") == 0){ // zrangebyscore key left right
+            if(argv != 4){
+                printf("Invalid usage of command `zrangebyscore`.\n");
+                help();   
+            }else{
+                // TODO:
+                char *endptr;
+                errno = 0;  // Reset errno before the conversion
+                double left = strtod(args[2], &endptr);
+
+                // Check for various possible errors
+                if (endptr == args[2]) {
+                    // No digits were found
+                    printf("Error: No digits were found\n");
+                    goto convertFail;
+                } else if (errno == ERANGE) {
+                    // The number is out of range for a double
+                    printf("Error: Number out of range\n");
+                    goto convertFail;
+                } else if (*endptr != '\0') {
+                    // The string contains extra characters after the number
+                    printf("Error: Extra characters after the number: '%s'\n", endptr);
+                    goto convertFail;
+                }
+
+                double right = strtod(args[3], &endptr);
+
+                // Check for various possible errors
+                if (endptr == args[3]) {
+                    // No digits were found
+                    printf("Error: No digits were found\n");
+                    goto convertFail;
+                } else if (errno == ERANGE) {
+                    // The number is out of range for a double
+                    printf("Error: Number out of range\n");
+                    goto convertFail;
+                } else if (*endptr != '\0') {
+                    // The string contains extra characters after the number
+                    printf("Error: Extra characters after the number: '%s'\n", endptr);
+                    goto convertFail;
+                }
+
+                int state = zrangebyscore(db, args[1], left, right);
+
+                if(state == FAIL)
+                    printf("Fatal error. Can not zrangebyscore %s %s %s \n", args[1], args[2], args[3]);
+                // else 
+                //     printf("zrangebyscore %s %s %s successfully. \n", args[1], args[2], args[3]);
+            }
+        }
+        else if(strcmp(args[0], "zrank") == 0){ // zrank key member
+            if(argv != 3){
+                printf("Invalid usage of command `zrank`.\n");
+                help();   
+            }else{
+                // TODO:
+                int rank = zrank(db, args[1], args[2]);
+                if(rank == -1)
+                    printf("Fatal error. Can not zrank %s %s \n", args[1], args[2]);
+                else 
+                    printf("%d\n", rank);
+            }
+        }
+        else if(strcmp(args[0], "zrem") == 0){ // zrem key member
+            if(argv != 3){
+                printf("Invalid usage of command `zrem`.\n");
+                help();   
+            }else{
+                // TODO:
+                int state = zrem(db, args[1], args[2]);
+                if(state == FAIL)
+                    printf("Fatal error. Can not zrem %s %s \n", args[1], args[2]);
+                else 
+                    printf("zrem %s %s successfully. \n", args[1], args[2]);
+            }
+        }
+        else if(strcmp(args[0], "zremrangebyscore") == 0){ // zcount key left right
+            if(argv != 4){
+                printf("Invalid usage of command `zremrangebyscore`.\n");
+                help();   
+            }else{
+                // TODO:
+                char *endptr;
+                errno = 0;  // Reset errno before the conversion
+                double left = strtod(args[2], &endptr);
+
+                // Check for various possible errors
+                if (endptr == args[2]) {
+                    // No digits were found
+                    printf("Error: No digits were found\n");
+                    goto convertFail;
+                } else if (errno == ERANGE) {
+                    // The number is out of range for a double
+                    printf("Error: Number out of range\n");
+                    goto convertFail;
+                } else if (*endptr != '\0') {
+                    // The string contains extra characters after the number
+                    printf("Error: Extra characters after the number: '%s'\n", endptr);
+                    goto convertFail;
+                }
+
+                double right = strtod(args[3], &endptr);
+
+                // Check for various possible errors
+                if (endptr == args[3]) {
+                    // No digits were found
+                    printf("Error: No digits were found\n");
+                    goto convertFail;
+                } else if (errno == ERANGE) {
+                    // The number is out of range for a double
+                    printf("Error: Number out of range\n");
+                    goto convertFail;
+                } else if (*endptr != '\0') {
+                    // The string contains extra characters after the number
+                    printf("Error: Extra characters after the number: '%s'\n", endptr);
+                    goto convertFail;
+                }
+
+                int state = zremrangebyscore(db, args[1], left, right);
+                if(state == FAIL)
+                    printf("Fatal error. Can not zremrangebyscore %s %s %s \n", args[1], args[2], args[3]);
+                else 
+                    printf("zremrangebyscore %s %s %s successfully. \n", args[1], args[2], args[3]);
             }
         }
         // else if(strcmp(args[0], "info") == 0){
@@ -303,6 +537,8 @@ static void stdin_cb(struct ev_loop *loop, ev_io *w, int revents) {
             help();
         }
     }
+    convertFail:
+        // do nothing
     printf("db > ");  // db > 提示符
     fflush(stdout);
 }

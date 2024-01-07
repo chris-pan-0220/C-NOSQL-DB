@@ -11,6 +11,7 @@
 #include "dbobj.h"
 #include "str.h"
 #include "dict.h"
+#include "sortedSet.h"
 
 static struct ev_loop *loop = NULL; // Is static OK ?
 
@@ -232,7 +233,6 @@ int expire(DB *db, const char * const key, uint64_t time){ // expire time (sec)
         return FAIL;
 }
 
-//
 static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent){
     // delete key, value pair from db->dict
     // delete that key from db->key->time
@@ -242,4 +242,147 @@ static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent){
     dict_del(timer->db->key_time, timer->key);
     free(timer->key); // BAD ? 
     free(timer);
+}
+
+int zadd(DB *db, const char * const set_key, const char * const element_key, double val){
+    if(db == NULL || set_key == NULL || element_key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_set_key(db->dict, set_key); // it's novalue-type
+
+    if(de->type == TYPE_NOVALUE){
+        DBobj *obj_set = DBobj_create(TYPE_SET);
+        int state = sortList_insert((SortList *)DBobj_get_val(obj_set), element_key, val);
+        return dictEntry_set_val(de, obj_set);
+    }else if(de->type == TYPE_SET){
+        return sortList_insert((SortList *)DBobj_get_val(de->v.val), element_key, val);
+    }else{
+        return FAIL;
+    }
+}
+
+int zcard(DB *db, const char * const key){
+    if(db == NULL || key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return ((SortList *)DBobj_get_val(de->v.val))->len;
+    }else{
+        return -1;
+    }
+}
+
+int zcount(DB *db, const char * const key, double left, double right){
+    if(db == NULL || key == NULL)
+        return -1;
+    
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_count_byscore(((SortList *)DBobj_get_val(de->v.val)), left, right);
+    }else{
+        return -1;
+    }
+}
+
+int zinterstore(DB *db, const char * const dest_key, const char * const source1_key, const char * const source2_key){
+    if(db == NULL || dest_key == NULL || source1_key == NULL || source2_key == NULL)
+        return FAIL;
+    
+    DictEntry *dest = dict_set_key(db->dict, dest_key); // it must be novalue-type
+    DictEntry *source1 = dict_get(db->dict, source1_key); // it's set-type
+    DictEntry *source2 = dict_get(db->dict, source2_key); // it's set-type
+    
+    if(!(dest != NULL && source1 != NULL && source2 != NULL && dest->type == TYPE_NOVALUE && source1->type == TYPE_SET && source2->type == TYPE_SET))
+        return FAIL;
+
+    // dest must be novalue-type
+    SortList *out = sortList_inter((SortList *)DBobj_get_val(source1->v.val), (SortList *)DBobj_get_val(source2->v.val));
+    // Dbobj *obj_set = DBobj_create(TYPE_SET); // do not use this
+    DBobj *obj_set = (DBobj*)malloc(sizeof(DBobj));
+    obj_set->value = out;
+    obj_set->type = TYPE_SET;
+
+    return dictEntry_set_val(dest, obj_set);
+}
+
+int zunionstore(DB *db, const char * const dest_key, const char * const source1_key, const char * const source2_key){
+    if(db == NULL || dest_key == NULL || source1_key == NULL || source2_key == NULL)
+        return FAIL;
+    
+    DictEntry *dest = dict_set_key(db->dict, dest_key); // it must be novalue-type
+    DictEntry *source1 = dict_get(db->dict, source1_key); // it's set-type
+    DictEntry *source2 = dict_get(db->dict, source2_key); // it's set-type
+    
+    if(!(dest != NULL && source1 != NULL && source2 != NULL && dest->type == TYPE_NOVALUE && source1->type == TYPE_SET && source2->type == TYPE_SET))
+        return FAIL;
+
+    // dest must be novalue-type
+    SortList *out = sortList_union((SortList *)DBobj_get_val(source1->v.val), (SortList *)DBobj_get_val(source2->v.val));
+    // Dbobj *obj_set = DBobj_create(TYPE_SET); // do not use this
+    DBobj *obj_set = (DBobj*)malloc(sizeof(DBobj));
+    obj_set->value = out;
+    obj_set->type = TYPE_SET;
+
+    return dictEntry_set_val(dest, obj_set);
+}
+
+int zrange(DB *db, const char * const key, int left, int right){
+    if(db == NULL || key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_range_byindex(((SortList *)DBobj_get_val(de->v.val)), left, right);
+    }else{
+        return FAIL;
+    }
+}
+
+int zrangebyscore(DB *db, const char * const key, double left, double right){
+    if(db == NULL || key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_range_byscore(((SortList *)DBobj_get_val(de->v.val)), left, right);
+    }else{
+        return FAIL;
+    }
+}
+
+int zrank(DB *db, const char * const set_key, const char * const element_key){
+    if(db == NULL || set_key == NULL || element_key == NULL)
+        return -1;
+    
+    DictEntry *de = dict_get(db->dict, set_key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_rank(((SortList *)DBobj_get_val(de->v.val)), element_key);
+    }else{
+        return -1;
+    }
+}
+
+int zrem(DB *db, const char * const set_key, const char * const element_key){
+    if(db == NULL || set_key == NULL || element_key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_get(db->dict, set_key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_delete_bykey(((SortList *)DBobj_get_val(de->v.val)), element_key);
+    }else{
+        return FAIL;
+    }
+}
+
+int zremrangebyscore(DB *db, const char * const key, double left, double right){
+    if(db == NULL || key == NULL)
+        return FAIL;
+    
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_SET){
+        return sortList_delete_byscore(((SortList *)DBobj_get_val(de->v.val)), left, right);
+    }else{
+        return FAIL;
+    }
 }

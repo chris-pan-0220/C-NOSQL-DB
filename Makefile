@@ -2,7 +2,7 @@
 CC=gcc
 LEVFLAGS=-lev -Wl,-rpath  # for libev
 # define target & source
-SOURCES=status.c db.c dbobj.c dict.c murmurhash.c dlist.c str.c
+SOURCES=status.c db.c dbobj.c dict.c murmurhash.c dlist.c str.c sortedSet.c
 OBJS=$(SOURCES:.c=.o)
 TARGET=libdatabase.so
 

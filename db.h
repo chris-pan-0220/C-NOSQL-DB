@@ -36,6 +36,29 @@ int expire(DB *db, const char * const key, uint64_t time); // set ket expire
 static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent);
 
 // TODO:
-// expire
+int zadd(DB *db, const char * const set_key, const char * const element_key, double val);
+int zcard(DB *db, const char * const key);
+int zcount(DB *db, const char * const key, double left, double right);
+int zinterstore(DB *db, const char * const dest_key, const char * const source1_key, const char * const source2_key);
+int zunionstore(DB *db, const char * const dest_key, const char * const source1_key, const char * const source2_key);
+int zrange(DB *db, const char * const key, int left, int right);
+int zrangebyscore(DB *db, const char * const key, double left, double right);
+int zrank(DB *db, const char * const set_key, const char * const element_key);
+int zrem(DB *db, const char * const set_key, const char * const element_key);
+int zremrangebyscore(DB *db, const char * const key, double left, double right);
+/**
+ * 
+ * ZADD 增加元素
+ * ZCARD 查看元素數量
+ * ZCOUNT 查詢範圍內成員的數量
+ * ZINTERSTORE 把key交集, 分數加起來 Hashtable
+ * ZUNIONSTORE 把key聯集, 分數加起來 Hashtable
+ * ZRANGE 使用index範圍(按照分數排序)列出集合當中的元素 list
+ * ZRANGEBYSCORE 使用score範圍列出集合當中的元素
+ * ZRANK 用key查詢, 返回排名 
+ * ZREM 用key, remove
+ * ZREMRANGEBYSCORE 使用score範圍刪除範圍中的元素
+*/
+
 
 #endif

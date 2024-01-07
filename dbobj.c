@@ -7,6 +7,7 @@
 #include "dlist.h"
 #include "str.h"
 #include "dict.h"
+#include "sortedSet.h"
 
 DBobj *DBobj_create(unsigned type){
     DBobj *dbobj = (DBobj*)malloc(sizeof(DBobj));
@@ -18,6 +19,8 @@ DBobj *DBobj_create(unsigned type){
             return DBobj_create_list(dbobj);
         case TYPE_DICT:
             return DBobj_create_dict(dbobj);
+        case TYPE_SET:
+            return DBobj_create_set(dbobj);
         default:
             return NULL; 
     }
@@ -51,6 +54,11 @@ DBobj *DBobj_create_dict(DBobj *dbobj){
     return dbobj;
 }
 
+DBobj *DBobj_create_set(DBobj *dbobj){
+    dbobj->value = sortList_create(); // TODO: default size
+    return dbobj;
+}
+
 void* DBobj_get_val(DBobj *dbobj){
     if(dbobj == NULL) 
         return NULL;
@@ -75,7 +83,8 @@ int DBobj_free(DBobj *dbobj){ // TODO: return `state`
             state = DBobj_free_dict(dbobj);
             break;
         case TYPE_SET:
-            return FAIL;  // TODO
+            state = DBobj_free_set(dbobj);
+            break;
         default:
             return FAIL; 
     }
@@ -106,6 +115,11 @@ int DBobj_free_dict(DBobj *dbobj){
     return dict_free(dbobj->value);
 }
 
-// DBobj *DBobj_create_set() // TODO:
+int DBobj_free_set(DBobj *dbobj){
+    if(dbobj->type != TYPE_SET)
+        return FAIL;
+    return sortList_free(dbobj->value);
+}
+
 
 // DBobj *DBobj_create_dict() // TODO:

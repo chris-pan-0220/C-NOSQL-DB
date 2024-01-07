@@ -1,4 +1,4 @@
-# HW5: Sorted List
+# HW6: Hash Table
 * Author: 潘兆新
 * Student ID: 111504506
 * Department: 資電二

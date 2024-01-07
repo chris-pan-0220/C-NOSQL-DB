@@ -6,5 +6,7 @@
 #define TYPE_LIST 2
 #define TYPE_SET 3
 #define TYPE_DICT 4
+#define TYPE_UNSIGNED_INT64 5
+#define TYPE_SIGNED_INT64 6
 
 #endif

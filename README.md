@@ -73,6 +73,12 @@ gcc -o memoryleak memoryleak.c -L. -ldatabase -Wl,-rpath=.
 ```bash
 gcc -o benchmark benchmark.c -L. -ldatabase -Wl,-rpath=.
 ```
+
+## Compile libev application
+```bash 
+gcc -o application application.c  -lev -Wl,-rpath
+```
+
 ## Compile Benchmark Test for hiredis
 ```bash
 gcc redistest.c -o redistest -I /usr/local/include/hiredis -lhiredis

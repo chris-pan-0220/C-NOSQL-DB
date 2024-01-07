@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include <ev.h>
 #include "datatype.h"
 #include "status.h"
 #include "db.h"
@@ -11,16 +12,19 @@
 #include "str.h"
 #include "dict.h"
 
-
+static struct ev_loop *loop = NULL; // Is static OK ?
 
 DB *DB_create(size_t bucket_size){
     DB *db = (DB*)malloc(sizeof(DB));
     db->dict = dict_create(bucket_size);
+    db->key_time = NULL;
     return db;
 }
 // void free_db(DB *db);
 int DB_free(DB *db){
     dict_free(db->dict);
+    if(db->key_time)
+        dict_free(db->key_time);
     free(db);
     return SUCCESS;
 }
@@ -142,4 +146,100 @@ int lrange(DB *db, const char * const key, int left, int right){ // problem: int
     }
 
     return SUCCESS;
+}
+
+int hset(DB *db, const char * const key, const char * const field, const char * const val){
+    if(db == NULL || key == NULL || field == NULL || val == NULL)
+        return FAIL;
+    
+    // create a dict 
+    DictEntry *de = dict_set_key(db->dict, key); // it's novalue-type
+    // 原生 string
+    if(de->type == TYPE_NOVALUE){ // create new dict
+        DBobj *obj_dict = DBobj_create(TYPE_DICT);
+        // set key - `field`
+        DictEntry *de_ = dict_set_key((Dict *)DBobj_get_val(obj_dict), field);
+        // set value
+        dictEntry_set_string(de_, val); // TODO: state
+        // attach new dict to db
+        return dictEntry_set_val(de, obj_dict);
+    }else if(de->type == TYPE_DICT){// dict has existed. `de->v.val` is dict
+        // set key 
+        DictEntry *de_ = dict_set_key((Dict *)DBobj_get_val(de->v.val), field);
+        // set value
+        return dictEntry_set_string(de_, val);
+    }else 
+        return FAIL;
+}
+char* hget(DB *db, const char * const key, const char * const field){
+    if(db == NULL || key == NULL || field == NULL)
+        return NULL;
+
+    DictEntry *de = dict_get(db->dict, key);
+    if(de->type == TYPE_DICT){
+        DictEntry *de_ = dict_get((Dict *)DBobj_get_val(de->v.val), field);
+        assert(de_->type == TYPE_STRING);
+        return de_->v.val; // TODO: 統一string儲存
+    }else
+        return NULL;
+}
+int hdel(DB *db, const char * const key, const char * const field){
+    if(db == NULL || key == NULL || field == NULL)
+        return FAIL;
+
+    DictEntry *de = dict_get(db->dict, key); // it's novalue-type
+    if(de->type == TYPE_DICT)
+        return dict_del((Dict *)DBobj_get_val(de->v.val), field);
+    else
+        return FAIL;
+}
+
+struct ev_loop* initialize_loop() {
+    if (loop == NULL) {
+        loop = ev_loop_new(EVFLAG_AUTO);
+    }
+    return loop;
+}
+
+struct expire_timer{
+    struct ev_timer w;
+    DB *db;
+    char *key; // TODO:
+};
+
+int expire(DB *db, const char * const key, uint64_t time){ // expire time (sec)
+    if(db == NULL || key == NULL || time <= 0)
+        return FAIL;
+    
+    if(db->key_time == NULL)
+        db->key_time = dict_create(BUCKET_SIZE_LIST[0]);
+    // set key
+    DictEntry *de = dict_set_key(db->key_time, key); // set unsigned int
+    // set value to novalue-type
+    if(de->type == TYPE_NOVALUE || de->type == TYPE_UNSIGNED_INT64){
+        dictEntry_set_unsignedint(de, time);
+        // set timer 
+        // create watcher 
+        struct expire_timer *timer = (struct expire_timer*)malloc(sizeof(struct expire_timer));
+        timer->db = db;
+        // timer->key = key; // Is it OK ?
+        timer->key = (char*)malloc(sizeof(char)*64); // 64
+        strncpy(timer->key, key, 64); // Is it OK ?
+        ev_timer_init(&timer->w, expire_cb, time, 0.); // 0: no repeat
+        ev_timer_start(loop, &timer->w);
+        return SUCCESS;
+    }else 
+        return FAIL;
+}
+
+//
+static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent){
+    // delete key, value pair from db->dict
+    // delete that key from db->key->time
+    struct expire_timer *timer = (struct expire_timer*)w;
+    dict_del(timer->db->dict, timer->key); // expired key, value pair
+    // null key ?
+    dict_del(timer->db->key_time, timer->key);
+    free(timer->key); // BAD ? 
+    free(timer);
 }

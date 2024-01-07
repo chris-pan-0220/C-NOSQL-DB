@@ -9,6 +9,7 @@ typedef struct DBobj{
 DBobj *DBobj_create(unsigned type);// create empty node | API
 DBobj *DBobj_create_list(DBobj *dbobj);
 DBobj *DBobj_create_string(DBobj *dbobj);
+DBobj *DBobj_create_dict(DBobj *dbobj);
 void* DBobj_get_val(DBobj *dbobj);
 // int DBobj_set_string(DBobj *dbobj, const char * const val); // it's not needed
 // DBobj *DBobj_create_set(DBobj *dbobj);  // TODO
@@ -16,5 +17,6 @@ void* DBobj_get_val(DBobj *dbobj);
 int DBobj_free(DBobj *dbobj);
 int DBobj_free_string(DBobj *dbobj);
 int DBobj_free_list(DBobj *dbobj);
+int DBobj_free_dict(DBobj *dbobj);
 
 #endif

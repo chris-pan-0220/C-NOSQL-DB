@@ -6,6 +6,7 @@
 #include "status.h"
 #include "dlist.h"
 #include "str.h"
+#include "dict.h"
 
 DBobj *DBobj_create(unsigned type){
     DBobj *dbobj = (DBobj*)malloc(sizeof(DBobj));
@@ -15,6 +16,8 @@ DBobj *DBobj_create(unsigned type){
             return DBobj_create_string(dbobj);
         case TYPE_LIST:
             return DBobj_create_list(dbobj);
+        case TYPE_DICT:
+            return DBobj_create_dict(dbobj);
         default:
             return NULL; 
     }
@@ -43,6 +46,11 @@ DBobj *DBobj_create_string(DBobj *dbobj){
     return dbobj;
 }
 
+DBobj *DBobj_create_dict(DBobj *dbobj){
+    dbobj->value = dict_create(BUCKET_SIZE_LIST[0]); // TODO: default size
+    return dbobj;
+}
+
 void* DBobj_get_val(DBobj *dbobj){
     if(dbobj == NULL) 
         return NULL;
@@ -54,7 +62,7 @@ void* DBobj_get_val(DBobj *dbobj){
     if embedded struct, we have to free DBobj recursively
 */ 
 
-int DBobj_free(DBobj *dbobj){
+int DBobj_free(DBobj *dbobj){ // TODO: return `state`
     int state = SUCCESS;
     switch (dbobj->type){
         case TYPE_STRING:
@@ -64,7 +72,8 @@ int DBobj_free(DBobj *dbobj){
             state = DBobj_free_list(dbobj);
             break;
         case TYPE_DICT:
-            return FAIL;  // TODO
+            state = DBobj_free_dict(dbobj);
+            break;
         case TYPE_SET:
             return FAIL;  // TODO
         default:
@@ -91,9 +100,11 @@ int DBobj_free_list(DBobj *dbobj){ // turn to static function !
 
 // }
 
-// int DBObj_free_dict(){ // TODO:
-
-// }
+int DBobj_free_dict(DBobj *dbobj){
+    if(dbobj->type != TYPE_DICT)
+        return FAIL;
+    return dict_free(dbobj->value);
+}
 
 // DBobj *DBobj_create_set() // TODO:
 

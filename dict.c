@@ -55,6 +55,28 @@ int dictEntry_set_string(DictEntry* de, const char * const source){
     return state;
 }
 
+int dictEntry_set_signedint(DictEntry* de, int64_t val){
+    if(de == NULL) 
+        return FAIL;
+    int state = SUCCESS;
+    if(de->type != TYPE_NOVALUE) // free and override. it's OK ?
+        state = dictEntry_free_val(de);
+    de->type = TYPE_SIGNED_INT64;
+    de->v.s64 = val;
+    return state;
+}
+
+int dictEntry_set_unsignedint(DictEntry* de, uint64_t val){
+    if(de == NULL) 
+        return FAIL;
+    int state = SUCCESS;
+    if(de->type != TYPE_NOVALUE) // free and override. it's OK ?
+        state = dictEntry_free_val(de);
+    de->type = TYPE_UNSIGNED_INT64;
+    de->v.u64 = val;
+    return state;
+}
+
 int dictEntry_free_val(DictEntry *de){
     if(de == NULL) 
         return FAIL;
@@ -62,7 +84,7 @@ int dictEntry_free_val(DictEntry *de){
     // if no value
     if(de->type == TYPE_STRING){
         free(de->v.val);
-    }else if(de->type == TYPE_LIST){ // TODO: free other types
+    }else if(de->type == TYPE_LIST || de->type == TYPE_DICT){
         state = DBobj_free(de->v.val);
     }
     de->type = TYPE_NOVALUE;
@@ -298,4 +320,14 @@ int dict_del(Dict *dict, const char * const key){
     dict->n_entry--;
 
     return SUCCESS;
+}
+
+struct migrate_watcher{
+    struct ev_idle w;
+    Dict *dict;
+};
+
+static void migrate_cb(struct ev_loop *loop, ev_idle *w, int revent){
+    struct migrate_watcher *watcher = (struct migrate_watcher*)w;
+    
 }

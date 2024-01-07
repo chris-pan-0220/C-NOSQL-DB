@@ -2,4 +2,7 @@
 storage
 testmemleak
 hiredis-master
+main-backup
+test_loop
+test_loop.c
 

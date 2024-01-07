@@ -1,6 +1,6 @@
 # define varaibles
 CC=gcc
-
+LEVFLAGS=-lev -Wl,-rpath  # for libev
 # define target & source
 SOURCES=status.c db.c dbobj.c dict.c murmurhash.c dlist.c str.c
 OBJS=$(SOURCES:.c=.o)
@@ -12,7 +12,7 @@ TARGET=libdatabase.so
 # $^: all dependency
 # $@: target
 $(TARGET): $(OBJS)
-	gcc -shared -g -o $(TARGET) $(OBJS)
+	gcc -shared -g -o $(TARGET) $(OBJS) $(LEVFLAGS)
 
 # generate .o files
 # $<: first dependencies

@@ -217,8 +217,6 @@ Dict* dict_create(size_t bucket_size){
     (dict->bucket)[0] = (DictEntryList**)malloc(sizeof(DictEntryList*)*bucket_size);
     (dict->n_bucket)[0] = bucket_size;
 
-    
-
     // malloc bucket 1
     for(int i = 0;i < BUCKET_SIZE_LIST_NUM;i++){
         if(BUCKET_SIZE_LIST[i] > bucket_size || i == BUCKET_SIZE_LIST_NUM - 1){

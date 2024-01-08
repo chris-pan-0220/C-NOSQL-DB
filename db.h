@@ -35,7 +35,6 @@ int rpop(DB *db, const char * const key);
 int llen(DB *db, const char * const key);
 int lrange(DB *db, const char * const key, int left, int right); // problem: int left, int right
 
-// only availible on `set`
 // only availible on `dict`
 int hset(DB *db, const char * const key, const char * const field, const char * const val); // key field value;
 char* hget(DB *db, const char * const key, const char * const field);
@@ -44,7 +43,7 @@ int hinfo(DB *db, const char * const key);
 int expire(DB *db, const char * const key, uint64_t time);
 static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent);
 
-// TODO:
+// only availible on `set`
 int zadd(DB *db, const char * const set_key, const char * const element_key, double val);
 int zcard(DB *db, const char * const key);
 int zcount(DB *db, const char * const key, double left, double right);
@@ -68,6 +67,4 @@ int zremrangebyscore(DB *db, const char * const key, double left, double right);
  * ZREM 用key, remove
  * ZREMRANGEBYSCORE 使用score範圍刪除範圍中的元素
 */
-
-
 #endif

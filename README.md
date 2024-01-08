@@ -9,10 +9,10 @@
 ```txt
 ***************************************
         Author: chris-pan
-        Version: 2.0
+        Version: 1.0
         A simple Nosql db
 ***************************************
-DataBase > help
+db > help
 Usage: 
 A simplest database with dict and doubly-linked list.
  set    [KEY] [VALUE]           - store Key-Value pair in DB. If key have existed in DB, update Value in DB.
@@ -24,9 +24,25 @@ A simplest database with dict and doubly-linked list.
  rpop   [KEY]                   - pop Value by right from a doubly-linked list in DB.
  llen   [KEY]                   - show length of a doubly-linked list in DB.
  lrange [KEY] [LEFT] [RIGHT]    - show elements from [LEFT] to [RIGHT] of a doubly-linked list.
+ hset   [KEY] [FIELD] [VALUE]
+ hget   [KEY] [FIELD]
+ hdel   [KEY] [FIELD]
+ hinfo  [KEY]
+ expire [KEY] [TIME]
+ zadd   [KEY] [MEMBER] [VAL]
+ zcard  [KEY]
+ zcount [KEY] [LEFT] [RIGHT]
+ zinterstore    [DEST] [SOURCE1] [SOURCE2]
+ zunionstore    [DEST] [SOURCE1] [SOURCE2]
+ zrange [KEY] [LEFT] [RIGHT]
+ zrangebyscore  [KEY] [LEFT] [RIGHT]
+ zrank  [KEY] [MEMBER]
+ zrem   [KEY] [MEMBER]
+ zremrangebyscore       [KEY] [LEFT] [RIGHT]
+ info                           - list DB state.
  help                           - list command usage.
  exit                           - exit and close DB.
-DataBase >
+db >
 ```
 ## Compile Dynamic Shared Library Using Makefile
 
@@ -46,7 +62,9 @@ gcc -fPIC -g -c dict.c -o dict.o
 gcc -fPIC -g -c murmurhash.c -o murmurhash.o
 gcc -fPIC -g -c dlist.c -o dlist.o
 gcc -fPIC -g -c str.c -o str.o
-gcc -shared -g -o libdatabase.so status.o db.o dbobj.o dict.o murmurhash.o dlist.o str.o
+gcc -fPIC -g -c sortedSet.c -o sortedSet.o
+gcc -fPIC -g -c event.c -o event.o
+gcc -shared -g -o libdatabase.so status.o db.o dbobj.o dict.o murmurhash.o dlist.o str.o sortedSet.o event.o -lev -Wl,-rpath
 ```
 
 clean: 
@@ -58,12 +76,12 @@ make clean
 It generates following lines: 
 
 ```bash
-rm -f status.o db.o dbobj.o dict.o murmurhash.o dlist.o str.o libdatabase.so
+rm -f status.o db.o dbobj.o dict.o murmurhash.o dlist.o str.o sortedSet.o event.o libdatabase.so
 ```
 
 ## Compile Main 
 ```bash
-gcc -o main main.c -L. -ldatabase -Wl,-rpath=.
+gcc -o main main.c -L. -ldatabase -lev -Wl,-rpath=.
 ```
 ## Compile Memory Leak Check
 ```bash
@@ -72,11 +90,6 @@ gcc -o memoryleak memoryleak.c -L. -ldatabase -Wl,-rpath=.
 ## Compile Benchmark for my database
 ```bash
 gcc -o benchmark benchmark.c -L. -ldatabase -Wl,-rpath=.
-```
-
-## Compile libev application
-```bash 
-gcc -o application application.c  -lev -Wl,-rpath
 ```
 
 ## Compile Benchmark Test for hiredis

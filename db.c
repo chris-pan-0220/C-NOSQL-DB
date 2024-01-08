@@ -12,8 +12,9 @@
 #include "str.h"
 #include "dict.h"
 #include "sortedSet.h"
+#include "event.h"
 
-static struct ev_loop *loop = NULL; // Is static OK ?
+// static struct ev_loop *loop = NULL; // Is static OK ?
 
 DB *DB_create(size_t bucket_size){
     DB *db = (DB*)malloc(sizeof(DB));
@@ -172,11 +173,14 @@ int hset(DB *db, const char * const key, const char * const field, const char * 
     }else 
         return FAIL;
 }
+
 char* hget(DB *db, const char * const key, const char * const field){
     if(db == NULL || key == NULL || field == NULL)
         return NULL;
 
     DictEntry *de = dict_get(db->dict, key);
+    if(de == NULL)
+        return NULL;
     if(de->type == TYPE_DICT){
         DictEntry *de_ = dict_get((Dict *)DBobj_get_val(de->v.val), field);
         assert(de_->type == TYPE_STRING);
@@ -184,6 +188,7 @@ char* hget(DB *db, const char * const key, const char * const field){
     }else
         return NULL;
 }
+
 int hdel(DB *db, const char * const key, const char * const field){
     if(db == NULL || key == NULL || field == NULL)
         return FAIL;
@@ -195,20 +200,22 @@ int hdel(DB *db, const char * const key, const char * const field){
         return FAIL;
 }
 
-struct ev_loop* initialize_loop() {
-    if (loop == NULL) {
-        loop = ev_loop_new(EVFLAG_AUTO);
-    }
-    return loop;
+int hinfo(DB *db, const char * const key){
+    if(db == NULL || key == NULL)
+        return FAIL;
+
+    DictEntry *de = dict_get(db->dict, key);
+    if(de == NULL)
+        return FAIL;
+    if(de->type == TYPE_DICT){
+        dict_info((Dict *)DBobj_get_val(de->v.val));
+        return SUCCESS;
+    }else
+        return FAIL;
 }
 
-struct expire_timer{
-    struct ev_timer w;
-    DB *db;
-    char *key; // TODO:
-};
-
-int expire(DB *db, const char * const key, uint64_t time){ // expire time (sec)
+int expire(DB *db, const char * const key, uint64_t time){ 
+    // expire time (sec)
     if(db == NULL || key == NULL || time <= 0)
         return FAIL;
     
@@ -221,7 +228,7 @@ int expire(DB *db, const char * const key, uint64_t time){ // expire time (sec)
         dictEntry_set_unsignedint(de, time);
         // set timer 
         // create watcher 
-        struct expire_timer *timer = (struct expire_timer*)malloc(sizeof(struct expire_timer));
+        ev_expire *timer = (ev_expire*)malloc(sizeof(ev_expire));
         timer->db = db;
         // timer->key = key; // Is it OK ?
         timer->key = (char*)malloc(sizeof(char)*64); // 64
@@ -236,7 +243,7 @@ int expire(DB *db, const char * const key, uint64_t time){ // expire time (sec)
 static void expire_cb(struct ev_loop *loop, ev_timer *w, int revent){
     // delete key, value pair from db->dict
     // delete that key from db->key->time
-    struct expire_timer *timer = (struct expire_timer*)w;
+    ev_expire *timer = (ev_expire*)w;
     dict_del(timer->db->dict, timer->key); // expired key, value pair
     // null key ?
     dict_del(timer->db->key_time, timer->key);

@@ -3,6 +3,7 @@
 #include <ev.h>
 #include <stdint.h>
 #include "dbobj.h"
+#include "event.h"
 
 extern const size_t BUCKET_SIZE_LIST[];
 extern const int BUCKET_SIZE_LIST_NUM;
@@ -23,13 +24,67 @@ typedef struct DictEntryList{
     DictEntry *head;
 } DictEntryList;
 
+// typedef struct Dict{ 
+//     DictEntryList **bucket;
+//     size_t n_bucket;
+//     size_t n_entry;
+//     // enum{ FIRST, SECOND } used;
+//     // int migrate_index;
+// } Dict;
+
 typedef struct Dict{ 
-    DictEntryList **bucket;
-    size_t n_bucket;
-    size_t n_entry;
-    // enum{ FIRST, SECOND } used;
-    // int migrate_index;
+    DictEntryList **bucket[2];
+    size_t n_bucket[2];
+    size_t n_entry[2];
+    // 用default size去初始化
+    int used; // default 0 ; otherwise 1
+    int migrating; // default 0
+    int migrate_idx; // default 0
+    struct ev_migrate *watcher; // store callback
 } Dict;
+
+typedef struct ev_migrate{
+    ev_idle w;
+    Dict *dict;
+} ev_migrate;
+
+/**
+ * 影響範圍: 
+ * n_bucket
+ * n_entry
+ * bucket
+ * 
+ * 
+
+
+typedef struct Dict{ 
+    DictEntryList **bucket[2];
+    size_t n_bucket[2];
+    size_t n_entry[2];
+    // 用default size去初始化
+    int used; // default 0 ; otherwise 1
+    int migrating; // default 0
+    int migrate_idx; // default 0
+    ev_migrate *watcher; // store callback
+} Dict;
+
+一開始dict直接創建兩個不同長度的bucket(53, 97)
+每一個dict在創建的時候註冊一個idle，當event loop進入idle狀態，
+if load factor > 0.7, 持續擴增表的大小直到load factor不再大於0.7, 或是已經最大
+    used變數紀錄目前使用的表
+    從migrate的index, 取一個dictListEntry遷移到另外一個表(比較大的)
+else load factor < 0.1, 持續縮小表的大小直到load factor不再小於0.1, 或是已經最小
+    used變數紀錄目前使用的表
+    從migrate的index, 取一個dictListEntry遷移到另外一個表(比較小的)
+
+migrate流程
+
+甚麼時候完成migrate: 當migrate_idx[used] == n_bucket[used], 完成migrate
+migrate_idx設為0
+used切換
+
+一次遷移一個元素(for a key)
+*/
 
 extern const size_t BUCKET_SIZE_LIST[]; // sizes of BUCKET, for increasing capacity of dict
 extern const int BUCKET_SIZE_LIST_NUM;
@@ -47,6 +102,7 @@ uint32_t
 hashFunction(const char * const key);
 Dict* dict_create(size_t bucket_size);
 int dict_free(Dict *dict);
+void dict_info(Dict *dict);
 
 
 DictEntry *dict_set_key(Dict *dict, const char * const key); // refactor (???)
@@ -54,9 +110,8 @@ DictEntry *dict_set_key(Dict *dict, const char * const key); // refactor (???)
 DictEntry *dict_get(Dict *dict, const char * const key);
 int dict_del(Dict *dict, const char * const key);
 
-// 手動 migrate to larger / smaller dict 
-// void dict_migrate_cb(Dict *dict, const char * const key);
-static void migrate_cb(struct ev_loop *loop, ev_idle *w, int revent);
+// idle: migrate to larger / smaller dict 
+void migrate_cb(struct ev_loop *loop, ev_idle *w, int revent); 
 
 // TODO: 
 // Dict* dict_rehashcheck(Dict *dict);

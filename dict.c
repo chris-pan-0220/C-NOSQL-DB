@@ -8,8 +8,11 @@
 #include "murmurhash.h"
 #include "str.h"
 #include "dict.h"
+#include "event.h"
 
 #define MAX_DATA_LEN 100000
+#define LF_MAX 0.20
+#define LF_MIN 0.10
 
 const size_t BUCKET_SIZE_LIST[] = {
     53,			97,			193,		389,		769,
@@ -209,12 +212,49 @@ hashFunction(const char * const key){
 
 Dict* dict_create(size_t bucket_size){
     Dict* dict = (Dict*)malloc(sizeof(Dict));
-    dict->bucket = (DictEntryList**)malloc(sizeof(DictEntryList*)*bucket_size);
-    for(int idx = 0;idx < bucket_size;idx++){
-        (dict->bucket)[idx] = dictEntryList_create();
+    
+    // malloc bucket 0
+    (dict->bucket)[0] = (DictEntryList**)malloc(sizeof(DictEntryList*)*bucket_size);
+    (dict->n_bucket)[0] = bucket_size;
+
+    
+
+    // malloc bucket 1
+    for(int i = 0;i < BUCKET_SIZE_LIST_NUM;i++){
+        if(BUCKET_SIZE_LIST[i] > bucket_size || i == BUCKET_SIZE_LIST_NUM - 1){
+            (dict->bucket)[1] = (DictEntryList**)malloc(sizeof(DictEntryList*)*BUCKET_SIZE_LIST[i]);
+            (dict->n_bucket)[1] = BUCKET_SIZE_LIST[i];
+            break;
+        }
     }
-    dict->n_entry = 0;
-    dict->n_bucket = bucket_size;
+    
+    for(int idx = 0;idx < (dict->n_bucket)[0];idx++){
+        (dict->bucket)[0][idx] = dictEntryList_create();
+    }
+
+    for(int idx = 0;idx < (dict->n_bucket)[1];idx++){
+        (dict->bucket)[1][idx] = dictEntryList_create();
+    }
+
+    (dict->n_entry)[0] = 0;
+    (dict->n_entry)[1] = 0;
+
+    
+
+    // register watcher
+    dict->watcher = (ev_migrate*)malloc(sizeof(ev_migrate));
+    dict->watcher->dict = dict;
+
+    
+
+    ev_idle_init(&(dict->watcher->w), migrate_cb);
+    
+    // get loop
+    if(loop == NULL) // 提早啟動loop???
+        initialize_loop();
+    
+    ev_idle_start(loop, &(dict->watcher->w));
+    
     return dict;
 }
 
@@ -222,16 +262,39 @@ int dict_free(Dict *dict){
     if(dict == NULL) 
         return FAIL;
     int state = SUCCESS;
-    for(int idx = 0;idx < dict->n_bucket;idx++){
-        DictEntryList* delist = (dict->bucket)[idx];
+
+    // 
+    for(int idx = 0;idx < (dict->n_bucket)[0];idx++){
+        DictEntryList* delist = (dict->bucket)[0][idx];
         state = dictEntryList_free(delist);
         if(state == FAIL)
             return FAIL;
     }
-    free(dict->bucket);
+    free((dict->bucket)[0]);
+
+    for(int idx = 0;idx < (dict->n_bucket)[1];idx++){
+        DictEntryList* delist = (dict->bucket)[1][idx];
+        state = dictEntryList_free(delist);
+        if(state == FAIL)
+            return FAIL;
+    }
+    free((dict->bucket)[1]);
+
     free(dict);
 
     return SUCCESS;
+}
+
+void dict_info(Dict *dict){
+    printf("Used table: %d\n", dict->used);
+    printf("In migration: %d\n", dict->migrating);
+    if(dict->migrating){
+        printf("migration index: %d\n", dict->migrate_idx);
+    }
+    printf("table 0 n_bucket: %ld\n", (dict->n_bucket)[0]);
+    printf("table 0 n_entry: %ld\n", (dict->n_entry)[0]);
+    printf("table 1 n_bucket: %ld\n", (dict->n_bucket)[1]);
+    printf("table 1 n_entry: %ld\n", (dict->n_entry)[1]);
 }
 
 /*  
@@ -242,92 +305,229 @@ DictEntry* dict_set_key(Dict *dict, const char * const key){
     if(key == NULL || dict == NULL)
         return NULL;
     uint32_t hash = hashFunction(key);
-    int idx = hash % dict->n_bucket;
+
+    int table_idx = 0;
+    if(dict->migrating){
+        table_idx = !dict->used; // 0 to 1, 1 to 0
+    }else{ // not migrate 
+        table_idx = dict->used;
+    }
+
+    int idx = hash % (dict->n_bucket)[table_idx];
     // store to bucket
-    DictEntryList *delist = (dict->bucket)[idx];
+    DictEntryList *delist = (dict->bucket)[table_idx][idx];
     DictEntry *de = dictEntryList_find(delist, key);
     if(de == NULL){
         de = dictEntry_create_novalue(key);
         int state = dictEntryList_insert(delist, de);
         if(state == FAIL)
             return NULL;
-        dict->n_entry++;
+        (dict->n_entry)[table_idx]++;
         return de;
     }else
         return de;
 }
-
-// refactor....
-// int dict_set_val(Dict *dict, const char * const key, void *val){ // Is it usefull ? 
-//     // getHash: hashfunction
-//     uint32_t hash = hashFunction(key);
-//     // mode size
-//     int idx = hash % dict->n_bucket;
-//     // store to bucket
-//     DictEntryList *delist = (dict->bucket)[idx];
-//     DictEntry *de = dictEntryList_find(delist, key);
-//     if(de != NULL){
-//         // !!!
-//         if(de->type == TYPE_STRING){
-//             size_t l1 = strlen(de->v.val);
-//             size_t l2 = strlen((char*)val);
-//             if(l1 < l2){
-//                 free(de->v.val);
-//                 de->v.val = (char*)malloc(sizeof(char)*l2);
-//             }
-//             strncpy(de->v.val, (char*)val, l2);
-//             // strcpy(de->v.val, (char*)val);
-//         }else{
-//             dictEntry_free_val(de);
-//             size_t l2 = strlen((char*)val);
-//             de->v.val = (char*)malloc(sizeof(char)*l2);
-//             strncpy(de->v.val, (char*)val, l2);
-//             // strcpy(de->v.val, (char*)val);
-//         }
-//         return SUCCESS;
-//     }else{
-//         int state = dictEntryList_insert(delist, de);
-//         assert(state == SUCCESS);
-//         dict->n_entry++;
-//         return state;
-//     }
-// }
 
 DictEntry *dict_get(Dict *dict, const char * const key){
     if(key == NULL) 
         return NULL;
     // getHash: hashfunction
     uint32_t hash = hashFunction(key);
-    // mode size
-    int idx = hash % dict->n_bucket;
-    DictEntryList *delist = (dict->bucket)[idx];
-    DictEntry *de = dictEntryList_find(delist, key);
 
-    return de;
+    // not migrate: search in used table
+    if(dict->migrating){
+        for(int table_idx = 0;table_idx <= 1;table_idx++){
+            int idx = hash % (dict->n_bucket)[table_idx];
+            DictEntryList *delist = (dict->bucket)[table_idx][idx];
+            DictEntry *de = dictEntryList_find(delist, key);
+            if(de != NULL)
+                return de;
+        }
+        return NULL;
+    }else{ // not migrating
+        int table_idx = dict->used;
+        int idx = hash % (dict->n_bucket)[table_idx];
+        DictEntryList *delist = (dict->bucket)[table_idx][idx];
+        DictEntry *de = dictEntryList_find(delist, key);
+        return de;
+    }
 }
 
 int dict_del(Dict *dict, const char * const key){
     if(key == NULL) 
         return FAIL;
     uint32_t hash = hashFunction(key);
-    int idx = hash % dict->n_bucket;
 
-    DictEntryList *delist = (dict->bucket)[idx];
-    DictEntry *de = dictEntryList_UnlinkFind(delist, key); // Check: why not use dictEntryList_delete
-    if(de == NULL)
+    if(dict->migrating){
+        for(int table_idx = 0;table_idx <= 1;table_idx++){
+            int idx = hash % (dict->n_bucket)[table_idx];
+
+            DictEntryList *delist = (dict->bucket)[table_idx][idx];
+            DictEntry *de = dictEntryList_UnlinkFind(delist, key); // Check: why not use dictEntryList_delete
+            
+            if(de == NULL)
+                continue;
+
+            dictEntry_free(de);
+            (dict->n_entry)[table_idx]--;
+
+            return SUCCESS;
+        }
         return FAIL;
-    dictEntry_free(de);
-    dict->n_entry--;
+    }else{
+        int table_idx = dict->used;
+        int idx = hash % (dict->n_bucket)[table_idx];
 
-    return SUCCESS;
-}
+        DictEntryList *delist = (dict->bucket)[table_idx][idx];
+        DictEntry *de = dictEntryList_UnlinkFind(delist, key); // Check: why not use dictEntryList_delete
+        
+        if(de == NULL)
+            return FAIL;
 
-struct migrate_watcher{
-    struct ev_idle w;
-    Dict *dict;
-};
+        dictEntry_free(de);
+        (dict->n_entry)[table_idx]--;
 
-static void migrate_cb(struct ev_loop *loop, ev_idle *w, int revent){
-    struct migrate_watcher *watcher = (struct migrate_watcher*)w;
+        return SUCCESS;
+    }
     
 }
+
+void migrate_cb(struct ev_loop *loop, ev_idle *w, int revent){
+    struct ev_migrate *watcher = (struct ev_migrate*)w; // TODO: add watcher
+    Dict *dict = watcher->dict;
+
+    // needn't to migrate
+    if(!dict->migrating){ // assmue another bucket is clean
+        
+        int table_idx = dict->used;
+        double lf = (double)(dict->n_entry)[table_idx] / (dict->n_bucket)[table_idx];
+
+        if(lf > LF_MAX){
+
+            if((dict->n_bucket)[table_idx] >= BUCKET_SIZE_LIST[BUCKET_SIZE_LIST_NUM-1])
+                return;
+
+            // create a larger bucket
+            if((dict->n_bucket)[!table_idx] <= (dict->n_bucket)[table_idx]){
+                for(int i = 0;i < BUCKET_SIZE_LIST_NUM;i++){
+                    if(BUCKET_SIZE_LIST[i] > (dict->n_bucket)[table_idx]){
+                        // free bucket first, assume that it is empty in dictEntryList
+                        for(int idx = 0;idx < (dict->n_bucket)[!table_idx];idx++){
+                            dictEntryList_free((dict->bucket)[!table_idx][idx]);
+                        }
+                        free((dict->bucket)[!table_idx]);
+
+                        (dict->n_bucket)[!table_idx] = BUCKET_SIZE_LIST[i];
+                        (dict->n_entry)[!table_idx] = 0;
+                        (dict->bucket)[!table_idx] = (DictEntryList**)malloc(sizeof(DictEntryList*)*BUCKET_SIZE_LIST[i]);
+                        for(int idx = 0;idx < BUCKET_SIZE_LIST[i];idx++){
+                            (dict->bucket)[!table_idx][idx] = dictEntryList_create();
+                        }
+                    }
+                }
+            }else{
+                // ignore. It has larger bucket.
+            }
+
+            dict->migrate_idx = 0;
+            dict->migrating = 1;
+            
+        }else if(lf < LF_MIN){
+
+            if((dict->n_bucket)[table_idx] <= BUCKET_SIZE_LIST[0])
+                return;
+
+            // create a smaller bucket
+            // dictEntryList不能被free
+            if((dict->n_bucket)[!table_idx] >= (dict->n_bucket)[table_idx]){
+
+                for(int i = BUCKET_SIZE_LIST_NUM - 1;i >= 0 ;i--){
+                    if(BUCKET_SIZE_LIST[i] < (dict->n_bucket)[table_idx]){
+                        // free bucket first, assume that it is empty in dictEntryList
+                        for(int idx = 0;idx < (dict->n_bucket)[!table_idx];idx++){
+                            dictEntryList_free((dict->bucket)[!table_idx][idx]);
+                        }
+                        free((dict->bucket)[!table_idx]);
+
+                        (dict->n_bucket)[!table_idx] = BUCKET_SIZE_LIST[i];
+                        (dict->n_entry)[!table_idx] = 0;
+                        (dict->bucket)[!table_idx] = (DictEntryList**)malloc(sizeof(DictEntryList*)*BUCKET_SIZE_LIST[i]);
+                        for(int idx = 0;idx < BUCKET_SIZE_LIST[i];idx++){
+                            (dict->bucket)[!table_idx][idx] = dictEntryList_create();
+                        }
+                    }
+                }
+            }else{
+                // ignore. It has smaller bucket.
+            }
+
+            dict->migrate_idx = 0;
+            dict->migrating = 1;
+
+        }else{
+            // needn't to migrate
+            return;
+        }
+    }else{ 
+        int table_idx = dict->used;
+        while(dict->migrate_idx < (dict->n_bucket)[table_idx] && ((dict->bucket)[table_idx][dict->migrate_idx])->head == NULL){
+            dict->migrate_idx++;
+        }
+        // check migrate 是否完成
+        if(dict->migrate_idx >= (dict->n_bucket)[table_idx]){// End migration. It should be `==`
+            dict->migrate_idx = 0;
+            dict->migrating = 0;
+            dict->used = !dict->used;
+            return;
+        }
+
+        // migrate an element
+        // unlink a node from list
+        DictEntryList *delist = (dict->bucket)[table_idx][dict->migrate_idx];
+        DictEntry *de = delist->head;
+        delist->head = delist->head->next;
+        // decrement entry number
+        (dict->n_entry)[table_idx]--;
+            
+        // get hash of key
+        uint32_t hash = hashFunction(de->key);
+        // get idx
+        int idx = hash % (dict->n_bucket)[!table_idx];
+        // insert to another bucket
+        dictEntryList_insert((dict->bucket)[!table_idx][idx], de);
+        // increment entry number
+        (dict->n_entry)[!table_idx]++;
+    }
+}
+
+/**
+
+
+typedef struct Dict{ 
+    DictEntryList **bucket[2];
+    size_t n_bucket[2];
+    size_t n_entry[2];
+    // 用default size去初始化
+    int used; // default 0 ; otherwise 1
+    int migrating; // default 0
+    int migrate_idx; // default 0
+    ev_migrate *watcher; // store callback
+} Dict;
+
+一開始dict直接創建兩個不同長度的bucket(53, 97)
+每一個dict在創建的時候註冊一個idle，當event loop進入idle狀態，
+if load factor > 0.7, 持續擴增表的大小直到load factor不再大於0.7, 或是已經最大
+    used變數紀錄目前使用的表
+    從migrate的index, 取一個dictListEntry遷移到另外一個表(比較大的)
+else load factor < 0.1, 持續縮小表的大小直到load factor不再小於0.1, 或是已經最小
+    used變數紀錄目前使用的表
+    從migrate的index, 取一個dictListEntry遷移到另外一個表(比較小的)
+
+migrate流程
+
+甚麼時候完成migrate: 當migrate_idx[used] == n_bucket[used], 完成migrate
+migrate_idx設為0
+used切換
+
+一次遷移一個元素(for a key)
+*/
